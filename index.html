@@ -1868,9 +1868,11 @@ async function signInWithGoogle(){
   const st=document.getElementById('login-status');
   if(btn)btn.disabled=true;
   if(st)st.textContent='Redirecting to Google…';
+  const isElectron=/Electron\//.test(navigator.userAgent);
+  const redirectTo=isElectron?'https://kmr-fisher.github.io/contract-mgt/':window.location.href;
   const {error}=await supa.auth.signInWithOAuth({
     provider:'google',
-    options:{redirectTo:window.location.href}
+    options:{redirectTo}
   });
   if(error){
     if(st)st.textContent='Sign-in failed: '+error.message;
