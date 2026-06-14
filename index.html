@@ -1829,12 +1829,25 @@ async function initAuth(){
 
 async function loadProfile(){
   try{
-    const {data}=await supa.from('profiles').select('*').eq('id',AUTH.user.id).single();
-    AUTH.profile=data;
-    // Auto-promote known admin email if DB role is wrong
-    if(AUTH.user.email===ADMIN_EMAIL&&AUTH.profile&&AUTH.profile.role!=='admin'){
-      await supa.from('profiles').update({role:'admin'}).eq('id',AUTH.user.id);
-      AUTH.profile.role='admin';
+    const role=AUTH.user.email===ADMIN_EMAIL?'admin':'supervisor';
+    const {data,error}=await supa.from('profiles').select('*').eq('id',AUTH.user.id).single();
+    if(error||!data){
+      // First login — create the profile row
+      const {data:created}=await supa.from('profiles').upsert({
+        id:AUTH.user.id,
+        email:AUTH.user.email,
+        name:AUTH.user.user_metadata?.full_name||AUTH.user.user_metadata?.name||AUTH.user.email,
+        avatar_url:AUTH.user.user_metadata?.avatar_url||null,
+        role
+      }).select().single();
+      AUTH.profile=created;
+    } else {
+      AUTH.profile=data;
+      // Promote known admin email
+      if(AUTH.user.email===ADMIN_EMAIL&&AUTH.profile.role!=='admin'){
+        await supa.from('profiles').update({role:'admin'}).eq('id',AUTH.user.id);
+        AUTH.profile.role='admin';
+      }
     }
   }catch(e){logErr('PROFILE',e.message);}
 }
