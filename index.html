@@ -1297,6 +1297,8 @@ function renderSettings(el){
     <div class="card">
       <div class="sec-title" style="margin-bottom:16px">Data</div>
       <div class="setting-row"><div><div class="setting-label">Export All Data</div><div class="setting-sub">Download full backup as JSON</div></div><button class="btn bs" onclick="expJSON()">${IC.dl} Export</button></div>
+      <div class="setting-row"><div><div class="setting-label">Import Backup</div><div class="setting-sub">Restore data from a JSON backup file</div></div><button class="btn bs" onclick="document.getElementById('imp-file').click()">${IC.plus} Import</button></div>
+      <input type="file" id="imp-file" accept=".json" style="display:none" onchange="impJSON(this)">
       <div class="setting-row"><div><div class="setting-label">Clear All Data</div><div class="setting-sub">Permanently delete everything</div></div><button class="btn bd" onclick="clearAll()">Clear All</button></div>
     </div>
     <div class="card">
@@ -1645,6 +1647,22 @@ function doExport(){
   closeModal();toast(`Exported ${txs.length} transactions`,'s');
 }
 function expJSON(){const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`ContractMgmt_backup_${today()}.json`;a.click();toast('Exported','s');}
+function impJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(!d.projects||!d.categories)throw new Error('Invalid backup file');
+      if(!confirm('This will replace ALL current data with the backup. Continue?'))return;
+      S={...S,...d};S.view='dash';S.pid=null;S.selectedAccount=null;
+      save();applyTheme();render();
+      toast('Data imported successfully','s');
+    }catch(err){toast('Import failed: '+err.message,'e');}
+    input.value='';
+  };
+  reader.readAsText(file);
+}
 function clearAll(){confirm2('Delete ALL data permanently?',()=>{S.projects=[];S.staff=[];S.accounts=[];S.categories=[...DEF_EXP,...DEF_INC];save();toast('Cleared','w');render();},'Clear All','bd');}
 
 // THEME
