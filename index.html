@@ -1405,6 +1405,7 @@ function renderSettings(el){
     </div>
     <div class="card">
       <div class="sec-title" style="margin-bottom:16px">Data</div>
+      <div class="setting-row"><div><div class="setting-label">Re-upload Local Data to Cloud</div><div class="setting-sub">Push all data from this device to Supabase — use if cloud shows empty</div></div><button class="btn bp" onclick="forceReupload()">${IC.plus} Upload Now</button></div>
       <div class="setting-row"><div><div class="setting-label">Export All Data</div><div class="setting-sub">Download full backup as JSON</div></div><button class="btn bs" onclick="expJSON()">${IC.dl} Export</button></div>
       <div class="setting-row"><div><div class="setting-label">Import Backup</div><div class="setting-sub">Restore data from a JSON backup file</div></div><button class="btn bs" onclick="document.getElementById('imp-file').click()">${IC.plus} Import</button></div>
       <input type="file" id="imp-file" accept=".json" style="display:none" onchange="impJSON(this)">
@@ -2022,20 +2023,26 @@ async function rejectTx(sbId){
   renderContent();
 }
 
-// Admin: sync a project to Supabase
+// Admin: sync a project to Supabase — tries extended schema, falls back to core
 async function syncProjToSupabase(p){
+  const core={
+    id:p.id,name:p.name,agency:p.agency||null,client:p.client||null,
+    contract_value:Number(p.contractValue||0),
+    start_date:p.startDate||null,end_date:p.endDate||null,
+    status:p.status||'active',account_id:p.accountId||null,
+    wage_type:p.wageType||null,wage_amount:Number(p.wageAmount||0),
+    notes:p.notes||null
+  };
   try{
     await supa.from('projects').upsert({
-      id:p.id,name:p.name,agency:p.agency||null,client:p.client||null,
+      ...core,
       contract_type:p.contractType||null,location:p.location||null,
-      contract_value:Number(p.contractValue||0),
-      start_date:p.startDate||null,end_date:p.endDate||null,
-      status:p.status||'active',account_id:p.accountId||null,
-      wage_type:p.wageType||null,wage_amount:Number(p.wageAmount||0),
-      notes:p.notes||null,
       metadata:{lostDays:p.lostDays||[],variations:p.variations||[],planGoals:p.planGoals||[],planBudgets:p.planBudgets||[],assignedStaff:p.assignedStaff||[]}
     });
-  }catch(e){logErr('SYNCPROJ',e.message);}
+  }catch(e){
+    try{await supa.from('projects').upsert(core);}
+    catch(e2){logErr('SYNCPROJ',e2.message);}
+  }
 }
 
 // Map a flat Supabase transaction row to local camelCase format
@@ -2115,11 +2122,14 @@ async function loadFromSupabase(){
 
 // Admin: push existing localStorage data to Supabase on first cloud login
 async function migrateLocalToSupabase(ld){
-  toast('Uploading local data to cloud…','i');
-  try{
-    // Projects + their embedded transactions
-    for(const p of ld.projects||[]){
-      await syncProjToSupabase(p);
+  const projs=ld.projects||[],accs=ld.accounts||[],staff=ld.staff||[];
+  const txCount=projs.reduce((n,p)=>n+(p.transactions||[]).length,0);
+  toast(`Uploading ${projs.length} projects, ${txCount} transactions, ${accs.length} accounts…`,'i');
+  let ok=0,fail=0;
+  // Projects + embedded transactions
+  for(const p of projs){
+    try{
+      await syncProjToSupabase(p);ok++;
       for(const tx of p.transactions||[]){
         await supa.from('transactions').upsert({
           id:tx.id,type:tx.type,amount:tx.amount,
@@ -2132,20 +2142,41 @@ async function migrateLocalToSupabase(ld){
           approved_at:tx.createdAt||new Date().toISOString()
         }).catch(e=>logErr('MIG_TX',e.message));
       }
-    }
-    // Accounts
-    for(const a of ld.accounts||[])
-      await supa.from('accounts').upsert({id:a.id,name:a.name,icon:a.icon,color:a.color,currency:a.currency||'JMD',opening_balance:a.openingBalance||0}).catch(e=>logErr('MIG_ACC',e.message));
-    // Categories — all including defaults (skip base64 custom icons, too large)
-    for(const c of ld.categories||[]){
-      const icon=c.icon&&!c.icon.startsWith('data:')?c.icon:null;
-      await supa.from('categories').upsert({id:c.id,name:c.name,type:c.type,color:c.color,icon}).catch(e=>logErr('MIG_CAT',e.message));
-    }
-    // Staff
-    for(const s of ld.staff||[])
-      await supa.from('staff').upsert({id:s.id,name:s.name,role:s.role||null,phone:s.phone||null,email:s.email||null,staff_type:s.staffType||null}).catch(e=>logErr('MIG_STAFF',e.message));
-    toast('Data uploaded to cloud!','s');
-  }catch(e){logErr('MIGRATE',e.message,e.stack||'');toast('Migration partial — check logs','w');}
+    }catch(e){fail++;logErr('MIG_PROJ',e.message);}
+  }
+  // Accounts — try with opening_balance, fall back without
+  for(const a of accs){
+    const core={id:a.id,name:a.name,icon:a.icon||'🏦',color:a.color||'',currency:a.currency||'JMD'};
+    await supa.from('accounts').upsert({...core,opening_balance:a.openingBalance||0})
+      .catch(()=>supa.from('accounts').upsert(core).catch(e=>logErr('MIG_ACC',e.message)));
+  }
+  // Categories (skip base64 icons — too large for text column)
+  for(const c of ld.categories||[]){
+    const icon=c.icon&&!c.icon.startsWith('data:')?c.icon:null;
+    await supa.from('categories').upsert({id:c.id,name:c.name,type:c.type,color:c.color,icon})
+      .catch(e=>logErr('MIG_CAT',e.message));
+  }
+  // Staff — try with email, fall back without
+  for(const s of staff){
+    const core={id:s.id,name:s.name,role:s.role||null,phone:s.phone||null,staff_type:s.staffType||null};
+    await supa.from('staff').upsert({...core,email:s.email||null})
+      .catch(()=>supa.from('staff').upsert(core).catch(e=>logErr('MIG_STAFF',e.message)));
+  }
+  if(fail===0) toast(`Upload complete — ${ok} projects synced to cloud`,'s');
+  else toast(`Upload done: ${ok} succeeded, ${fail} failed — check logs`,'w');
+}
+
+// Admin: force re-upload of all local data to Supabase (usable from Settings)
+async function forceReupload(){
+  const loc=localStorage.getItem(STORE);
+  if(!loc){toast('No local data found to upload','w');return;}
+  let ld;
+  try{ld=JSON.parse(loc);}catch(e){toast('Local data unreadable','e');return;}
+  if(!(ld.projects||[]).length&&!(ld.accounts||[]).length){toast('Local data is empty — nothing to upload','w');return;}
+  _migrationAttempted=true;
+  await migrateLocalToSupabase(ld);
+  await loadFromSupabase();
+  render();
 }
 
 // Admin: assign a supervisor (by email) to a project in Supabase
