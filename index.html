@@ -270,10 +270,24 @@ html,body{overflow-x:hidden}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="bg-mesh"></div>
-<div id="app">
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);align-items:center;justify-content:center">
+  <div style="background:var(--surf);backdrop-filter:var(--blur);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:40px 36px;max-width:360px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="width:56px;height:56px;background:var(--acc-g);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;box-shadow:0 4px 20px var(--acc-glow)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg></div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:6px">Contract MGT</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:28px">Fisher's Equipment Limited</div>
+    <button id="google-btn" onclick="signInWithGoogle()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border-radius:var(--radius-sm);border:1px solid var(--bdr);background:var(--surf3);color:var(--txt);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:var(--trans)">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+      Sign in with Google
+    </button>
+    <div id="login-status" style="margin-top:14px;font-size:12px;color:var(--txt3)"></div>
+  </div>
+</div>
+<div id="app" style="display:none">
   <div id="sidebar"></div>
   <div id="main">
     <div class="topbar" id="topbar"></div>
@@ -287,6 +301,15 @@ input[type=number]{-moz-appearance:textfield}
 const STORE='cpm_v6';
 const LOG_STORE='cpm_v6_log';
 const MAX_LOG=200;
+const ADMIN_EMAIL='kemarrfisher@protonmail.com';
+
+// SUPABASE
+const SB_URL='https://nveckjybcssotxkhuzbi.supabase.co';
+const SB_KEY='sb_publishable_9eieAC7g7zhj_C6tXiV0fA_IPJiA1bI';
+const supa=supabase.createClient(SB_URL,SB_KEY);
+let AUTH={user:null,profile:null};
+const isAdmin=()=>AUTH.profile?.role==='admin'||AUTH.user?.email===ADMIN_EMAIL;
+const isSupervisor=()=>!!AUTH.user&&!isAdmin();
 
 function logErr(type,msg,detail=''){
   try{
@@ -532,7 +555,7 @@ const DEF_INC=[
   {id:'i6',name:'Other Income',icon:CICONS.trending,color:'#f59e0b',type:'income'},
 ];
 
-let S={projects:[],staff:[],accounts:[],categories:[...DEF_EXP,...DEF_INC],theme:'light',view:'dash',pid:null,tab:'Overview',chartType:'donut',reportType:'expense',reportGroup:'categories',periodFilter:'all',periodMonth:null,selectedAccount:null,txDateFilter:null,pinHash:null,pinRecovery:null};
+let S={projects:[],staff:[],accounts:[],categories:[...DEF_EXP,...DEF_INC],theme:'light',view:'dash',pid:null,tab:'Overview',chartType:'donut',reportType:'expense',reportGroup:'categories',periodFilter:'all',periodMonth:null,selectedAccount:null,txDateFilter:null,pinHash:null,pinRecovery:null,pendingTxs:[]};
 
 function load(){
   try{
@@ -797,25 +820,35 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){
 function render(){renderSidebar();renderTopbar();renderContent();}
 
 function renderSidebar(){
-  const navs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'reports',l:'Reports',i:IC.rep},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
-  // Mobile bottom nav (5 primary items — Reports hidden to keep it tight)
-  const mobNavs=[{id:'dash',l:'Home',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
+  const allNavs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'reports',l:'Reports',i:IC.rep},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
+  const supNavs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx}];
+  const navs=isSupervisor()?supNavs:allNavs;
+  const mobNavItems=isSupervisor()?supNavs:[{id:'dash',l:'Home',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
   const mn=document.getElementById('mob-nav');
-  if(mn)mn.innerHTML=mobNavs.map(n=>`<button class="mn-item${S.view===n.id&&!S.pid?' active':''}" onclick="nav('${n.id}')">${n.i}<span>${n.l}</span></button>`).join('');
-  const accItems=S.accounts.map(a=>{
-    const b=accBal(a);const active=S.view==='transactions'&&S.selectedAccount===a.id;
-    return `<div class="sb-acc-item${active?' active':''}" style="position:relative" onclick="viewAcc('${a.id}')"><span class="sb-acc-dot" style="background:${a.color||'#3b82f6'}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span><span class="sb-acc-bal" style="color:${b<0?'var(--red)':'var(--green)'}">${(a.currency==='USD'?'$':'J$')+(b<0?'-':'')+Math.abs(b).toLocaleString('en',{maximumFractionDigits:0})}</span><button class="btn btn-icon bs" style="padding:2px;position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity 150ms;font-size:10px" onclick="event.stopPropagation();openAddAcc('${a.id}')">${IC.edit}</button></div>`;
-  }).join('');
+  if(mn)mn.innerHTML=mobNavItems.map(n=>`<button class="mn-item${S.view===n.id&&!S.pid?' active':''}" onclick="nav('${n.id}')">${n.i}<span>${n.l}</span></button>`).join('');
+
+  const userName=AUTH.profile?.name||AUTH.user?.email?.split('@')[0]||'User';
+  const userRole=isAdmin()?'Admin':'Supervisor';
+  const userBadge=`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surf2);border-radius:var(--radius-sm);margin-bottom:8px">
+    <div style="width:28px;height:28px;border-radius:50%;background:var(--acc-g);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">${(userName[0]||'U').toUpperCase()}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(userName)}</div><div style="font-size:10px;color:var(--txt3)">${userRole}</div></div>
+    <button class="btn btn-icon bs" style="padding:4px;flex-shrink:0" onclick="signOut()" title="Sign out"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+  </div>`;
+
+  const accSection=isSupervisor()?'':`
+    <div class="sb-acc-header"><span>Accounts</span><button class="btn btn-icon bs" style="padding:3px" onclick="openAddAcc()">${IC.plus}</button></div>
+    <div class="sb-acc-item${S.view==='transactions'&&!S.selectedAccount?' active':''}" onclick="nav('transactions')"><span class="sb-acc-dot" style="background:var(--txt3)"></span><span style="flex:1">All Accounts</span></div>
+    ${S.accounts.map(a=>{const b=accBal(a);const active=S.view==='transactions'&&S.selectedAccount===a.id;return`<div class="sb-acc-item${active?' active':''}" style="position:relative" onclick="viewAcc('${a.id}')"><span class="sb-acc-dot" style="background:${a.color||'#3b82f6'}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span><span class="sb-acc-bal" style="color:${b<0?'var(--red)':'var(--green)'}">${(a.currency==='USD'?'$':'J$')+(b<0?'-':'')+Math.abs(b).toLocaleString('en',{maximumFractionDigits:0})}</span></div>`;}).join('')}
+    <div class="sb-item" style="color:var(--acc);font-size:12px" onclick="openAddAcc()">${IC.plus}<span>Add Account</span></div>`;
+
   document.getElementById('sidebar').innerHTML=`
-    <div class="sb-logo"><div class="sb-logo-icon">${IC.proj}</div><div><div class="sb-logo-text">Contract Mgmt</div><div class="sb-logo-sub">v4.0</div></div></div>
+    <div class="sb-logo"><div class="sb-logo-icon">${IC.proj}</div><div><div class="sb-logo-text">Contract Mgmt</div><div class="sb-logo-sub">${userRole}</div></div></div>
     <nav class="sb-nav">
       <div style="padding:6px 0">${navs.map(n=>`<div class="sb-item${S.view===n.id&&!S.pid?' active':''}" onclick="nav('${n.id}')">${n.i}<span>${n.l}</span></div>`).join('')}</div>
-      <div class="sb-acc-header"><span>Accounts</span><button class="btn btn-icon bs" style="padding:3px" onclick="openAddAcc()">${IC.plus}</button></div>
-      <div class="sb-acc-item${S.view==='transactions'&&!S.selectedAccount?' active':''}" onclick="nav('transactions')"><span class="sb-acc-dot" style="background:var(--txt3)"></span><span style="flex:1">All Accounts</span></div>
-      ${accItems}
-      <div class="sb-item" style="color:var(--acc);font-size:12px" onclick="openAddAcc()">${IC.plus}<span>Add Account</span></div>
+      ${accSection}
     </nav>
     <div class="sb-footer">
+      ${userBadge}
       <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px">
         <span style="font-size:11px;color:var(--txt2)">Theme</span>
         <div style="display:flex;gap:3px">
@@ -832,8 +865,8 @@ function renderTopbar(){
     const m={dash:'Dashboard',projects:'Projects',transactions:'Transactions',reports:'Reports',staff:'Staff',settings:'Settings'};
     title=m[S.view]||'Contract Management';
     if(S.view==='transactions'&&S.selectedAccount){const a=getAcc(S.selectedAccount);if(a){title=esc(a.name);sub=`${esc(a.currency)} · Balance: ${fmt(accBal(a),a.currency)}`;}}
-    if(S.view==='projects')actions=`<button class="btn bp" onclick="openAddProj()">${IC.plus} New Project</button>`;
-    if(S.view==='transactions')actions=`<button class="btn bg-green" onclick="openAddTx()">${IC.plus} Add Transaction</button>`;
+    if(S.view==='projects'&&isAdmin())actions=`<button class="btn bp" onclick="openAddProj()">${IC.plus} New Project</button>`;
+    if(S.view==='transactions')actions=`<button class="btn bg-green" onclick="openAddTx()">${IC.plus} ${isSupervisor()?'Add Expense':'Add Transaction'}</button>`;
     if(S.view==='staff')actions=`<button class="btn bp" onclick="openAddStaff()">${IC.plus} Add Staff</button>`;
     if(S.view==='reports')actions=`<button class="btn bs" onclick="openExport()">${IC.dl} Export</button>`;
   }
@@ -842,6 +875,8 @@ function renderTopbar(){
 
 function renderContent(){
   const el=document.getElementById('content');
+  // Redirect supervisor away from restricted pages
+  if(isSupervisor()&&['reports','staff','settings'].includes(S.view)){S.view='dash';renderSidebar();}
   if(S.pid){renderProject(el);return;}
   switch(S.view){
     case'dash':renderDash(el);break;
@@ -861,7 +896,60 @@ function renderDash(el){
   const exp=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount||0),0);
   const bal=S.accounts.reduce((s,a)=>s+accBal(a),0);
   const cv=S.projects.reduce((s,p)=>s+Number(p.contractValue||0),0);
+
+  // Supervisor: simplified dashboard
+  if(isSupervisor()){
+    const myPending=txs.filter(t=>t.status==='pending');
+    const myApproved=txs.filter(t=>t.status==='approved'||!t.status);
+    el.innerHTML=`<div class="page">
+      <div class="grid2" style="margin-bottom:20px">
+        <div class="card stat stat-amber"><div class="stat-label">My Projects</div><div class="stat-value">${S.projects.length}</div></div>
+        <div class="card stat stat-blue"><div class="stat-label">Pending Submissions</div><div class="stat-value" style="color:${myPending.length?'#f59e0b':'var(--txt)'}">${myPending.length}</div></div>
+      </div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="sec-hdr"><span class="sec-title">My Submissions</span><button class="btn bg-green" style="font-size:12px;padding:6px 12px" onclick="openAddTx()">${IC.plus} Add Expense</button></div>
+        ${txs.slice(0,10).map(t=>{
+          const c=getCat(t.categoryId);
+          const statusBadge=t.status==='pending'?`<span style="font-size:10px;background:rgba(245,158,11,.2);color:#f59e0b;border-radius:10px;padding:2px 7px;font-weight:600">PENDING</span>`:t.status==='rejected'?`<span style="font-size:10px;background:rgba(239,68,68,.2);color:#ef4444;border-radius:10px;padding:2px 7px;font-weight:600">REJECTED</span>`:'';
+          return`<div class="tx-item"><div class="tx-icon" style="background:var(--surf3);color:var(--txt2)">${catIconHtml(c.icon)}</div><div class="tx-info"><div class="tx-name">${esc(t.payee||c.name)} ${statusBadge}</div><div class="tx-meta">${fmtDate(t.date)}${t.projectName?' · '+esc(t.projectName):''}</div></div><div class="tx-amount expense">-${fmt(t.amount)}</div></div>`;
+        }).join('')||empty(EI.tx,'No submissions yet','Use Add Expense to submit daily costs')}
+      </div>
+      ${dashContractSections()}
+    </div>`;
+    return;
+  }
+
+  // Admin: full dashboard
+  const pendingSection=S.pendingTxs&&S.pendingTxs.length?`
+    <div class="card" style="margin-bottom:20px;border-color:rgba(245,158,11,.4)">
+      <div class="sec-hdr" style="margin-bottom:12px">
+        <span class="sec-title" style="display:flex;align-items:center;gap:8px">⏳ Pending Approvals <span style="background:rgba(245,158,11,.25);color:#f59e0b;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700">${S.pendingTxs.length}</span></span>
+        <button class="btn bs" style="font-size:11px;padding:5px 10px" onclick="pullPending().then(()=>renderContent())">Refresh</button>
+      </div>
+      ${S.pendingTxs.map(t=>{
+        const c=getCat(t.category_id);
+        const proj=getProj(t.project_id);
+        const submitter=t.profiles?.name||t.profiles?.email||'Supervisor';
+        return`<div class="tx-item" style="border:1px solid var(--bdr);background:rgba(245,158,11,.05);margin-bottom:6px;border-radius:var(--radius-sm)">
+          <div class="tx-icon" style="background:rgba(245,158,11,.15);color:#f59e0b">${catIconHtml(c.icon)}</div>
+          <div class="tx-info">
+            <div class="tx-name">${esc(t.payee||c.name||'Expense')} <span style="font-size:10px;color:var(--txt3);font-weight:400">by ${esc(submitter)}</span></div>
+            <div class="tx-meta">${fmtDate(t.date)}${proj?' · '+esc(proj.name):''}</div>
+            ${t.note?`<div style="font-size:11px;color:var(--txt3);margin-top:2px">${esc(t.note)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div class="tx-amount expense">-${fmt(t.amount)}</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn bg-green" style="font-size:11px;padding:4px 10px" onclick="approveTx('${t.id}')">✓ Approve</button>
+              <button class="btn bd" style="font-size:11px;padding:4px 10px" onclick="rejectTx('${t.id}')">✕ Reject</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:'';
+
   el.innerHTML=`<div class="page">
+    ${pendingSection}
     <div class="grid4" style="margin-bottom:20px">
       <div class="card stat stat-amber"><div class="stat-label">Total Value of All Contracts</div><div class="stat-value">${fmt(cv)}</div><div class="stat-sub">${S.projects.length} project${S.projects.length!==1?'s':''}</div></div>
       <div class="card stat stat-green"><div class="stat-label">Total Income</div><div class="stat-value" style="color:var(--green)">${fmt(inc)}</div><div class="stat-sub">All time</div></div>
@@ -1297,6 +1385,7 @@ function renderStaffView(el){
 
 // SETTINGS
 function renderSettings(el){
+  if(isSupervisor()){el.innerHTML=`<div class="page"><div class="card"><div class="sec-title">Settings</div><div style="margin-top:10px;font-size:13px;color:var(--txt2)">Settings are managed by the admin.</div></div></div>`;return;}
   el.innerHTML=`<div class="page">
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);border-radius:var(--radius);margin-bottom:20px;font-size:13px;color:var(--txt2)">
       <span style="font-size:18px;flex-shrink:0">ℹ️</span>
@@ -1337,6 +1426,11 @@ function renderSettings(el){
         </div>
         <button class="btn bp" style="width:100%;justify-content:center" onclick="openSetPin()">Set PIN</button>`}
     </div>
+    ${isAdmin()?`<div class="card" style="grid-column:1/-1">
+      <div class="sec-title" style="margin-bottom:4px">👥 Team & Supervisor Access</div>
+      <div style="font-size:11px;color:var(--txt3);margin-bottom:14px">Assign supervisors to projects. They must sign in with Google first before you can assign them.</div>
+      <div id="team-card"><div style="font-size:12px;color:var(--txt3)">Loading…</div></div>
+    </div>`:''}
     <div class="card" style="grid-column:1/-1">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
         <div><div class="sec-title">Diagnostics / Error Log</div><div style="font-size:11px;color:var(--txt3);margin-top:2px">Crashes and save failures are recorded here automatically</div></div>
@@ -1357,6 +1451,8 @@ function renderSettings(el){
       }).join('');})()}
     </div>
   </div></div>`;
+  // Async-populate the team card after the DOM is ready
+  if(isAdmin()) setTimeout(()=>renderTeamSection(),0);
 }
 
 // NAVIGATION
@@ -1410,6 +1506,8 @@ function saveProj(editId){
     S.projects[idx]=proj;toast('Updated','s');
   }else{S.projects.push(proj);toast('Project created','s');}
   save();closeModal();render();
+  // Sync to Supabase so supervisors can be assigned
+  if(isAdmin())syncProjToSupabase(proj);
 }
 function delProj(id){S.projects=S.projects.filter(p=>p.id!==id);S.pid=null;save();closeModal();toast('Deleted','s');render();}
 
@@ -1421,9 +1519,12 @@ function _showTxModal(tx,projId,txType){
   const isE=!!tx;const ct=txType||'expense';
   const cats=ct==='income'?S.categories.filter(c=>c.type==='income'):S.categories.filter(c=>c.type==='expense');
   const selCat=isE&&tx.categoryId?getCat(tx.categoryId):(cats[0]||null);
-  openModal(`<div class="modal-header"><span class="modal-title">${isE?'Edit':'Add'} Transaction</span><button class="btn btn-icon bs" onclick="closeModal()">${IC.close}</button></div>
+  const tabsHtml=isSupervisor()
+    ?`<div class="tabs" style="margin-bottom:12px"><div class="tab tab-expense active">Expense</div></div>`
+    :`<div class="tabs" style="margin-bottom:12px" id="txttabs"><div class="tab tab-expense${ct==='expense'?' active':''}" onclick="swTxT('expense')">Expense</div><div class="tab tab-income${ct==='income'?' active':''}" onclick="swTxT('income')">Income</div><div class="tab tab-transfer${ct==='transfer'?' active':''}" onclick="swTxT('transfer')">Transfer</div></div>`;
+  openModal(`<div class="modal-header"><span class="modal-title">${isE?'Edit':'Add'} ${isSupervisor()?'Expense (Pending Approval)':'Transaction'}</span><button class="btn btn-icon bs" onclick="closeModal()">${IC.close}</button></div>
     <div class="modal-body">
-      <div class="tabs" style="margin-bottom:12px" id="txttabs"><div class="tab tab-expense${ct==='expense'?' active':''}" onclick="swTxT('expense')">Expense</div><div class="tab tab-income${ct==='income'?' active':''}" onclick="swTxT('income')">Income</div><div class="tab tab-transfer${ct==='transfer'?' active':''}" onclick="swTxT('transfer')">Transfer</div></div>
+      ${tabsHtml}
       <div class="amount-display ${ct}" id="txad">
         <div class="alabel" id="txal">${ct==='income'?'INCOME AMOUNT':ct==='transfer'?'TRANSFER AMOUNT':'EXPENSE AMOUNT'}</div>
         <div class="aval" id="txav">${isE?fmt(tx.amount):'J$ 0.00'}</div>
@@ -1439,9 +1540,9 @@ function _showTxModal(tx,projId,txType){
       <div class="form-row"><label>Note</label><textarea id="txnote" rows="2" placeholder="Optional note...">${isE?esc(tx.note||''):''}</textarea></div>
       <div class="form-row"><label>Receipt (PDF, JPG, PNG, DOCX, XLS)</label><input type="file" id="txreceipt" accept=".pdf,.jpg,.jpeg,.png,.docx,.doc,.xls,.xlsx" style="background:var(--surf2);border:1px solid var(--bdr);border-radius:var(--radius-sm);padding:7px 10px;color:var(--txt);font-size:12px;width:100%">${isE&&tx.receipt?`<div style="margin-top:6px;font-size:11px;color:var(--green)">✓ Receipt attached: ${esc(tx.receiptName||'file')} <a href="${tx.receipt}" download="${esc(tx.receiptName||'receipt')}" style="color:var(--acc);text-decoration:none;margin-left:8px">Download</a></div>`:''}</div>
     </div>
-    <div class="modal-footer">${isE?`<button class="btn bd" onclick="delTx('${tx.id}','${projId||tx.projectId||''}')">Delete</button>`:''}
+    <div class="modal-footer">${isE&&!isSupervisor()?`<button class="btn bd" onclick="delTx('${tx.id}','${projId||tx.projectId||''}')">Delete</button>`:''}
       <button class="btn bs" onclick="closeModal()">Cancel</button>
-      <button class="btn${ct==='income'?' bg-green':' bp'}" id="txsbtn" onclick="saveTx('${isE?tx.id:''}','${isE?projId||tx.projectId||'':''}')">Save Transaction</button>
+      <button class="btn bp" id="txsbtn" onclick="saveTx('${isE?tx.id:''}','${isE?projId||tx.projectId||'':''}'">${isSupervisor()?'Submit for Approval':'Save Transaction'}</button>
     </div>`,'modal-lg');
   document.getElementById('modal-inner').dataset.tt=ct;
 }
@@ -1462,9 +1563,17 @@ function updAmt(){const v=document.getElementById('txamt').value,av=document.get
 
 function saveTx(editId,editPid){
   const amt=document.getElementById('txamt').value;if(!amt||Number(amt)<=0){toast('Amount required','e');return;}
-  const type=document.getElementById('modal-inner').dataset.tt||'expense';
+  const type=isSupervisor()?'expense':(document.getElementById('modal-inner').dataset.tt||'expense');
   const pid=document.getElementById('txproj').value;if(!pid){toast('Select a project','e');return;}
   const p=getProj(pid);if(!p){toast('Project not found','e');return;}
+
+  // Supervisor: submit to Supabase as pending
+  if(isSupervisor()){
+    const fd={id:uid(),amount:Number(amt),categoryId:document.getElementById('txcid').value,accountId:document.getElementById('txacc').value,projectId:pid,date:document.getElementById('txdate').value||today(),ref:document.getElementById('txref').value.trim(),inv:document.getElementById('txinv').value.trim(),payee:document.getElementById('txpayee').value.trim(),note:document.getElementById('txnote').value.trim()};
+    submitPendingExpense(fd).then(ok=>{if(ok){closeModal();render();}});
+    return;
+  }
+
   const rFile=document.getElementById('txreceipt')?.files?.[0];
   function doSave(receipt,rName){
     const existTx=editId&&getProj(pid)?.transactions.find(t=>t.id===editId);
@@ -1688,8 +1797,277 @@ function clearAll(){confirm2('Delete ALL data permanently?',()=>{S.projects=[];S
 // THEME
 function setTheme(t){S.theme=t;applyTheme();save();renderSidebar();if(S.view==='settings')renderContent();}
 
+// ── AUTH ──────────────────────────────────────────────────────
+async function initAuth(){
+  applyTheme();
+  try{
+    const {data:{session}}=await supa.auth.getSession();
+    if(session){
+      AUTH.user=session.user;
+      await loadProfile();
+      await initApp();
+    } else {
+      showLogin();
+    }
+  }catch(e){
+    logErr('AUTH',e.message,e.stack||'');
+    showLogin();
+  }
+  // Listen for auth state changes (e.g. OAuth redirect back)
+  supa.auth.onAuthStateChange(async(_event,session)=>{
+    if(session&&!AUTH.user){
+      AUTH.user=session.user;
+      await loadProfile();
+      await initApp();
+    } else if(!session&&AUTH.user){
+      AUTH={user:null,profile:null};
+      S.pendingTxs=[];
+      showLogin();
+    }
+  });
+}
+
+async function loadProfile(){
+  try{
+    const {data}=await supa.from('profiles').select('*').eq('id',AUTH.user.id).single();
+    AUTH.profile=data;
+    // Auto-promote known admin email if DB role is wrong
+    if(AUTH.user.email===ADMIN_EMAIL&&AUTH.profile&&AUTH.profile.role!=='admin'){
+      await supa.from('profiles').update({role:'admin'}).eq('id',AUTH.user.id);
+      AUTH.profile.role='admin';
+    }
+  }catch(e){logErr('PROFILE',e.message);}
+}
+
+function showLogin(){
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('mob-nav').style.display='none';
+}
+
+async function signInWithGoogle(){
+  const btn=document.getElementById('google-btn');
+  const st=document.getElementById('login-status');
+  if(btn)btn.disabled=true;
+  if(st)st.textContent='Redirecting to Google…';
+  const {error}=await supa.auth.signInWithOAuth({
+    provider:'google',
+    options:{redirectTo:window.location.href}
+  });
+  if(error){
+    if(st)st.textContent='Sign-in failed: '+error.message;
+    if(btn)btn.disabled=false;
+  }
+}
+
+async function signOut(){
+  await supa.auth.signOut();
+  AUTH={user:null,profile:null};
+  S.pendingTxs=[];
+  showLogin();
+}
+
+async function initApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  if(isAdmin()){
+    load();           // localStorage (existing data)
+    await pullPending(); // overlay pending submissions from Supabase
+  } else {
+    await loadSupervisorData();
+  }
+  render();
+}
+
+// Admin: pull pending supervisor submissions from Supabase
+async function pullPending(){
+  try{
+    const {data,error}=await supa.from('transactions')
+      .select('*,profiles!submitted_by(name,email)')
+      .eq('status','pending');
+    if(!error) S.pendingTxs=data||[];
+  }catch(e){logErr('PENDING',e.message);}
+}
+
+// Supervisor: load only their assigned projects + their submitted transactions
+async function loadSupervisorData(){
+  try{
+    // 1. Get assignments
+    const {data:asgn}=await supa.from('project_assignments')
+      .select('project_id')
+      .eq('user_id',AUTH.user.id);
+    const projIds=(asgn||[]).map(a=>a.project_id);
+
+    // 2. Load those projects
+    let projects=[];
+    if(projIds.length){
+      const {data}=await supa.from('projects').select('*').in('id',projIds);
+      projects=data||[];
+    }
+
+    // 3. Load supervisor's own transactions (all statuses)
+    const {data:txData}=await supa.from('transactions')
+      .select('*')
+      .eq('submitted_by',AUTH.user.id);
+    const myTxs=txData||[];
+
+    // 4. Map to local S structure (snake_case → camelCase)
+    S.projects=projects.map(p=>({
+      id:p.id,name:p.name,agency:p.agency||'',client:p.client||'',
+      contractValue:p.contract_value||0,
+      startDate:p.start_date||'',endDate:p.end_date||'',
+      status:p.status||'active',accountId:p.account_id||'',
+      wageType:p.wage_type||'',wageAmount:p.wage_amount||0,
+      notes:p.notes||'',createdAt:p.created_at,
+      transactions:myTxs.filter(t=>t.project_id===p.id).map(t=>({
+        id:t.id,type:t.type,amount:t.amount,
+        categoryId:t.category_id,accountId:t.account_id,
+        projectId:t.project_id,date:t.date,
+        note:t.note||'',tags:[],
+        status:t.status,submittedBy:t.submitted_by,
+        ref:t.ref||'',inv:t.inv||'',payee:t.payee||''
+      })),
+      lostDays:[],variations:[],planGoals:[],planBudgets:[],assignedStaff:[]
+    }));
+
+    // Load shared categories/accounts from Supabase for display
+    const {data:cats}=await supa.from('categories').select('*');
+    if(cats&&cats.length) S.categories=cats.map(c=>({id:c.id,name:c.name,icon:c.icon||CICONS.tag,color:c.color||'#6b7280',type:c.type}));
+    const {data:accs}=await supa.from('accounts').select('*');
+    if(accs&&accs.length) S.accounts=accs.map(a=>({id:a.id,name:a.name,currency:a.currency||'JMD',color:a.color,icon:a.icon||'🏦',openingBalance:0}));
+
+  }catch(e){logErr('SUPLOAD',e.message,e.stack||'');}
+  applyTheme();
+}
+
+// Supervisor: submit expense as pending to Supabase
+async function submitPendingExpense(formData){
+  const {error}=await supa.from('transactions').insert({
+    id:formData.id,
+    type:'expense',
+    amount:formData.amount,
+    category_id:formData.categoryId||null,
+    account_id:formData.accountId||null,
+    project_id:formData.projectId,
+    date:formData.date,
+    ref:formData.ref||null,
+    inv:formData.inv||null,
+    payee:formData.payee||null,
+    note:formData.note||null,
+    status:'pending',
+    submitted_by:AUTH.user.id
+  });
+  if(error){toast('Submit failed: '+error.message,'e');return false;}
+  // Add to local S so the supervisor sees it immediately
+  const proj=getProj(formData.projectId);
+  if(proj) proj.transactions.push({...formData,status:'pending',submittedBy:AUTH.user.id});
+  return true;
+}
+
+// Admin: approve a pending transaction
+async function approveTx(sbId){
+  const t=S.pendingTxs.find(x=>x.id===sbId);if(!t){toast('Not found','e');return;}
+  // Add to admin's local project data
+  const proj=getProj(t.project_id);
+  if(proj){
+    proj.transactions.push({
+      id:uid(),type:t.type,amount:t.amount,
+      categoryId:t.category_id,accountId:t.account_id||'',
+      projectId:t.project_id,date:t.date,
+      ref:t.ref||'',inv:t.inv||'',payee:t.payee||'',
+      tags:[],note:t.note||'',
+      createdAt:new Date().toISOString()
+    });
+    save();
+  }
+  // Update Supabase
+  await supa.from('transactions').update({
+    status:'approved',
+    approved_by:AUTH.user.id,
+    approved_at:new Date().toISOString()
+  }).eq('id',sbId);
+  S.pendingTxs=S.pendingTxs.filter(x=>x.id!==sbId);
+  toast('Approved','s');
+  renderContent();
+}
+
+// Admin: reject a pending transaction
+async function rejectTx(sbId){
+  const reason=prompt('Rejection reason (optional):');
+  await supa.from('transactions').update({
+    status:'rejected',
+    rejection_reason:reason||null,
+    approved_by:AUTH.user.id,
+    approved_at:new Date().toISOString()
+  }).eq('id',sbId);
+  S.pendingTxs=S.pendingTxs.filter(x=>x.id!==sbId);
+  toast('Rejected','w');
+  renderContent();
+}
+
+// Admin: sync a project to Supabase so supervisors can be assigned
+async function syncProjToSupabase(p){
+  try{
+    await supa.from('projects').upsert({
+      id:p.id,name:p.name,agency:p.agency||null,client:p.client||null,
+      contract_value:Number(p.contractValue||0),
+      start_date:p.startDate||null,end_date:p.endDate||null,
+      status:p.status||'active',account_id:p.accountId||null,
+      wage_type:p.wageType||null,wage_amount:Number(p.wageAmount||0),
+      notes:p.notes||null
+    });
+  }catch(e){logErr('SYNCPROJ',e.message);}
+}
+
+// Admin: assign a supervisor (by email) to a project in Supabase
+async function assignSupervisor(projId,email){
+  email=email.trim().toLowerCase();
+  if(!email){toast('Enter an email','e');return;}
+  // Look up the profile
+  const {data:profiles}=await supa.from('profiles').select('id,email,name').eq('email',email);
+  if(!profiles||!profiles.length){toast('No user found with that email. They must sign in first.','e');return;}
+  const sup=profiles[0];
+  const {error}=await supa.from('project_assignments').upsert({project_id:projId,user_id:sup.id});
+  if(error)toast('Error: '+error.message,'e');
+  else{toast(`${sup.name||email} assigned to project`,'s');if(S.view==='settings')renderContent();}
+}
+
+// Admin: remove a supervisor from a project
+async function removeSupervisor(projId,userId){
+  await supa.from('project_assignments').delete().eq('project_id',projId).eq('user_id',userId);
+  toast('Removed','s');
+  renderTeamSection();
+}
+
+async function renderTeamSection(){
+  const el=document.getElementById('team-card');if(!el)return;
+  el.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:10px 0">Loading…</div>';
+  // Get all projects and their assignments
+  const {data:asgns}=await supa.from('project_assignments').select('project_id,user_id,profiles(name,email)');
+  const rows=(asgns||[]).map(a=>{
+    const p=getProj(a.project_id);
+    return`<div class="tx-item" style="flex-wrap:wrap;gap:6px">
+      <div class="tx-info"><div class="tx-name">${esc(a.profiles?.name||a.profiles?.email||a.user_id)}</div>
+      <div class="tx-meta">${esc(a.profiles?.email||'')} → ${esc(p?.name||a.project_id)}</div></div>
+      <button class="btn bd" style="font-size:11px;padding:4px 8px" onclick="removeSupervisor('${a.project_id}','${a.user_id}')">Remove</button>
+    </div>`;
+  }).join('');
+  const projOpts=S.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  el.innerHTML=`
+    <div style="margin-bottom:12px">${rows||'<div style="font-size:12px;color:var(--txt3);padding:8px 0">No assignments yet</div>'}</div>
+    <div style="border-top:1px solid var(--bdr);padding-top:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--txt2);margin-bottom:8px">Assign Supervisor to Project</div>
+      <div class="form-2col" style="gap:8px">
+        <div class="form-row" style="margin:0"><input id="sup-email" placeholder="Supervisor Google email" style="font-size:12px"></div>
+        <div class="form-row" style="margin:0"><select id="sup-proj" style="font-size:12px"><option value="">Select project…</option>${projOpts}</select></div>
+      </div>
+      <button class="btn bp" style="margin-top:8px;font-size:12px;padding:6px 14px" onclick="assignSupervisor(document.getElementById('sup-proj').value,document.getElementById('sup-email').value)">Assign</button>
+    </div>`;
+}
+
 // INIT
-load();render();
+async function initApp_boot(){await initAuth();}
+initApp_boot();
 </script>
 <script>
 if('serviceWorker' in navigator){
