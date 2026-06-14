@@ -2058,6 +2058,7 @@ async function syncTxToSupabase(tx){
 }
 
 // Admin: load all data from Supabase; falls back to localStorage on error
+let _migrationAttempted=false;
 async function loadFromSupabase(){
   try{
     const[projRes,txRes,accRes,catRes,staffRes]=await Promise.all([
@@ -2069,8 +2070,9 @@ async function loadFromSupabase(){
     ]);
     const projs=projRes.data||[],txs=txRes.data||[],accs=accRes.data||[],cats=catRes.data||[],staff=staffRes.data||[];
 
-    // If cloud is empty but localStorage has data, migrate it up first
-    if(!projs.length&&!accs.length){
+    // If cloud is empty but localStorage has data, migrate it up (only once per session)
+    if(!projs.length&&!accs.length&&!_migrationAttempted){
+      _migrationAttempted=true;
       const loc=localStorage.getItem(STORE);
       if(loc){
         try{
