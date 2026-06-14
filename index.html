@@ -1509,7 +1509,7 @@ function saveProj(editId){
   // Sync to Supabase so supervisors can be assigned
   if(isAdmin())syncProjToSupabase(proj);
 }
-function delProj(id){S.projects=S.projects.filter(p=>p.id!==id);S.pid=null;save();closeModal();toast('Deleted','s');render();}
+function delProj(id){S.projects=S.projects.filter(p=>p.id!==id);S.pid=null;save();closeModal();toast('Deleted','s');render();if(isAdmin())supa.from('projects').delete().eq('id',id).then(({error})=>{if(error)logErr('DEL_PROJ',error.message);});}
 
 // TRANSACTIONS
 function openAddTx(projId){_showTxModal(null,projId,'expense');}
@@ -1581,6 +1581,7 @@ function saveTx(editId,editPid){
     if(editId){if(editPid&&editPid!==pid){const op=getProj(editPid);if(op)op.transactions=op.transactions.filter(t=>t.id!==editId);}const idx=p.transactions.findIndex(t=>t.id===editId);if(idx>=0)p.transactions[idx]=tx;else p.transactions.push(tx);toast('Updated','s');}
     else{p.transactions.push(tx);toast('Saved','s');}
     save();closeModal();render();
+    if(isAdmin())syncTxToSupabase(tx);
   }
   if(rFile){
     if(rFile.size>4*1024*1024){toast('Receipt must be under 4 MB','e');return;}
@@ -1588,7 +1589,7 @@ function saveTx(editId,editPid){
   }
   else doSave(null,null);
 }
-function delTx(txId,projId){requirePin(()=>{confirm2('Delete this transaction?',()=>{const p=getProj(projId);if(p)p.transactions=p.transactions.filter(t=>t.id!==txId);save();closeModal();toast('Deleted','s');render();});});}
+function delTx(txId,projId){requirePin(()=>{confirm2('Delete this transaction?',()=>{const p=getProj(projId);if(p)p.transactions=p.transactions.filter(t=>t.id!==txId);save();closeModal();toast('Deleted','s');render();if(isAdmin())supa.from('transactions').delete().eq('id',txId).then(({error})=>{if(error)logErr('DEL_TX',error.message);});});});}
 
 // ACCOUNTS
 function openAddAcc(editId){
@@ -1621,8 +1622,9 @@ function saveAcc(editId){
   const acc={id:editId||uid(),name,icon:document.getElementById('aiv').value,color:document.getElementById('acv').value,currency:document.getElementById('acur').value,openingBalance:Number(document.getElementById('abal').value||0)};
   if(editId){const idx=S.accounts.findIndex(a=>a.id===editId);if(idx>=0)S.accounts[idx]=acc;toast('Updated','s');}else{S.accounts.push(acc);toast('Account added','s');}
   save();closeModal();render();
+  if(isAdmin())supa.from('accounts').upsert({id:acc.id,name:acc.name,icon:acc.icon,color:acc.color,currency:acc.currency,opening_balance:acc.openingBalance}).then(({error})=>{if(error)logErr('SYNCACC',error.message);});
 }
-function delAcc(id){S.accounts=S.accounts.filter(a=>a.id!==id);if(S.selectedAccount===id)S.selectedAccount=null;save();closeModal();toast('Deleted','s');render();}
+function delAcc(id){S.accounts=S.accounts.filter(a=>a.id!==id);if(S.selectedAccount===id)S.selectedAccount=null;save();closeModal();toast('Deleted','s');render();if(isAdmin())supa.from('accounts').delete().eq('id',id).then(({error})=>{if(error)logErr('DEL_ACC',error.message);});}
 
 // CATEGORIES
 function openAddCat(){
@@ -1666,12 +1668,14 @@ function saveCat(){
   const name=document.getElementById('cname').value.trim();if(!name){toast('Name required','e');return;}
   const raw=document.getElementById('civ').value;
   const icon=raw.startsWith('__svg__')?CICONS[raw.slice(7)]||CICONS.tag:raw.startsWith('__img__')?raw.slice(7):CICONS.tag;
-  S.categories.push({id:'cu'+uid(),name,type:document.getElementById('ctype').value,icon,color:document.getElementById('ccv').value});
+  const cat={id:'cu'+uid(),name,type:document.getElementById('ctype').value,icon,color:document.getElementById('ccv').value};
+  S.categories.push(cat);
   save();closeModal();toast('Category added','s');renderContent();
+  if(isAdmin()){const sbIcon=cat.icon&&!cat.icon.startsWith('data:')?cat.icon:null;supa.from('categories').upsert({id:cat.id,name:cat.name,type:cat.type,color:cat.color,icon:sbIcon}).then(({error})=>{if(error)logErr('SYNCCAT',error.message);});}
 }
 function delCat(id){
   if([...DEF_EXP,...DEF_INC].find(c=>c.id===id)){toast('Cannot delete default category','w');return;}
-  confirm2('Delete category?',()=>{S.categories=S.categories.filter(c=>c.id!==id);save();toast('Deleted','s');renderContent();});
+  confirm2('Delete category?',()=>{S.categories=S.categories.filter(c=>c.id!==id);save();toast('Deleted','s');renderContent();if(isAdmin())supa.from('categories').delete().eq('id',id).then(({error})=>{if(error)logErr('DEL_CAT',error.message);});});
 }
 
 // VARIATIONS
@@ -1680,8 +1684,8 @@ function openAddVar(pid){
     <div class="modal-body"><div class="form-row"><label>Description *</label><input id="vd" placeholder="Variation description"></div><div class="form-2col"><div class="form-row"><label>Amount</label><input id="va" type="number" placeholder="0.00"></div><div class="form-row"><label>Date</label><input id="vdt" type="date" value="${today()}"></div></div><div class="form-row"><label>Status</label><select id="vs"><option>Pending</option><option>Approved</option><option>Rejected</option></select></div></div>
     <div class="modal-footer"><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveVar('${pid}')">Save</button></div>`);
 }
-function saveVar(pid){const d=document.getElementById('vd').value.trim();if(!d){toast('Description required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}p.variations.push({id:uid(),description:d,amount:document.getElementById('va').value,date:document.getElementById('vdt').value,status:document.getElementById('vs').value});save();closeModal();toast('Variation added','s');renderProjTab(p);}
-function delVar(pid,id){confirm2('Delete variation?',()=>{const p=getProj(pid);if(!p)return;p.variations=p.variations.filter(v=>v.id!==id);save();toast('Deleted','s');renderProjTab(p);});}
+function saveVar(pid){const d=document.getElementById('vd').value.trim();if(!d){toast('Description required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}p.variations.push({id:uid(),description:d,amount:document.getElementById('va').value,date:document.getElementById('vdt').value,status:document.getElementById('vs').value});save();closeModal();toast('Variation added','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
+function delVar(pid,id){confirm2('Delete variation?',()=>{const p=getProj(pid);if(!p)return;p.variations=p.variations.filter(v=>v.id!==id);save();toast('Deleted','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);});}
 
 // LOST DAYS
 function openAddLD(pid){
@@ -1689,8 +1693,8 @@ function openAddLD(pid){
     <div class="modal-body"><div class="form-row"><label>Reason *</label><input id="ldr" placeholder="e.g. Heavy rain"></div><div class="form-2col"><div class="form-row"><label>Days Lost</label><input id="ldd" type="number" min="0.5" step="0.5" value="1"></div><div class="form-row"><label>Date</label><input id="lddt" type="date" value="${today()}"></div></div></div>
     <div class="modal-footer"><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveLD('${pid}')">Save</button></div>`);
 }
-function saveLD(pid){const r=document.getElementById('ldr').value.trim();if(!r){toast('Reason required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}p.lostDays.push({id:uid(),reason:r,days:document.getElementById('ldd').value,date:document.getElementById('lddt').value});save();closeModal();toast('Recorded','s');renderProjTab(p);}
-function delLD(pid,id){confirm2('Delete?',()=>{const p=getProj(pid);if(!p)return;p.lostDays=p.lostDays.filter(d=>d.id!==id);save();toast('Deleted','s');renderProjTab(p);});}
+function saveLD(pid){const r=document.getElementById('ldr').value.trim();if(!r){toast('Reason required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}p.lostDays.push({id:uid(),reason:r,days:document.getElementById('ldd').value,date:document.getElementById('lddt').value});save();closeModal();toast('Recorded','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
+function delLD(pid,id){confirm2('Delete?',()=>{const p=getProj(pid);if(!p)return;p.lostDays=p.lostDays.filter(d=>d.id!==id);save();toast('Deleted','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);});}
 
 // PLAN
 function openAddGoal(pid){
@@ -1698,8 +1702,8 @@ function openAddGoal(pid){
     <div class="modal-body"><div class="form-row"><label>Goal Name *</label><input id="gn" placeholder="e.g. Complete Phase 1"></div><div class="form-2col"><div class="form-row"><label>Target Amount</label><input id="gt" type="number" placeholder="Optional"></div><div class="form-row"><label>Current Progress</label><input id="gc" type="number" placeholder="0"></div></div><div class="form-2col"><div class="form-row"><label>Icon</label><input id="gi" value="🎯" style="font-size:20px;text-align:center"></div><div class="form-row"><label>Color</label><select id="gcol">${COLORS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div></div></div>
     <div class="modal-footer"><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveGoal('${pid}')">Save</button></div>`);
 }
-function saveGoal(pid){const n=document.getElementById('gn').value.trim();if(!n){toast('Name required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.planGoals)p.planGoals=[];p.planGoals.push({id:uid(),name:n,target:document.getElementById('gt').value,current:document.getElementById('gc').value,icon:document.getElementById('gi').value,color:document.getElementById('gcol').value});save();closeModal();toast('Goal added','s');renderProjTab(p);}
-function delGoal(pid,id){confirm2('Delete goal?',()=>{const p=getProj(pid);if(!p)return;p.planGoals=p.planGoals.filter(g=>g.id!==id);save();renderProjTab(p);});}
+function saveGoal(pid){const n=document.getElementById('gn').value.trim();if(!n){toast('Name required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.planGoals)p.planGoals=[];p.planGoals.push({id:uid(),name:n,target:document.getElementById('gt').value,current:document.getElementById('gc').value,icon:document.getElementById('gi').value,color:document.getElementById('gcol').value});save();closeModal();toast('Goal added','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
+function delGoal(pid,id){confirm2('Delete goal?',()=>{const p=getProj(pid);if(!p)return;p.planGoals=p.planGoals.filter(g=>g.id!==id);save();renderProjTab(p);if(isAdmin())syncProjToSupabase(p);});}
 
 function openAddBudget(pid){
   const cats=S.categories.filter(c=>c.type==='expense');
@@ -1707,8 +1711,8 @@ function openAddBudget(pid){
     <div class="modal-body"><div class="form-row"><label>Category *</label><select id="bc">${cats.map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div><div class="form-row"><label>Budget Amount *</label><input id="ba" type="number" placeholder="0.00"></div></div>
     <div class="modal-footer"><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveBudget('${pid}')">Save</button></div>`);
 }
-function saveBudget(pid){const a=document.getElementById('ba').value;if(!a||Number(a)<=0){toast('Amount required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.planBudgets)p.planBudgets=[];p.planBudgets.push({id:uid(),categoryId:document.getElementById('bc').value,amount:a});save();closeModal();toast('Budget added','s');renderProjTab(p);}
-function delBudget(pid,id){confirm2('Delete?',()=>{const p=getProj(pid);if(!p)return;p.planBudgets=p.planBudgets.filter(b=>b.id!==id);save();renderProjTab(p);});}
+function saveBudget(pid){const a=document.getElementById('ba').value;if(!a||Number(a)<=0){toast('Amount required','e');return;}const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.planBudgets)p.planBudgets=[];p.planBudgets.push({id:uid(),categoryId:document.getElementById('bc').value,amount:a});save();closeModal();toast('Budget added','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
+function delBudget(pid,id){confirm2('Delete?',()=>{const p=getProj(pid);if(!p)return;p.planBudgets=p.planBudgets.filter(b=>b.id!==id);save();renderProjTab(p);if(isAdmin())syncProjToSupabase(p);});}
 
 // STAFF
 function openAddStaff(){
@@ -1738,15 +1742,16 @@ function saveStaff(editId){
   const s={id:editId||uid(),name:n,role:document.getElementById('sr').value.trim(),staffType:document.getElementById('stype').value,phone:document.getElementById('sp').value.trim(),email:document.getElementById('se').value.trim()};
   if(editId){const idx=S.staff.findIndex(x=>x.id===editId);if(idx>=0)S.staff[idx]=s;toast('Updated','s');}else{S.staff.push(s);toast('Staff added','s');}
   save();closeModal();render();
+  if(isAdmin())supa.from('staff').upsert({id:s.id,name:s.name,role:s.role||null,phone:s.phone||null,email:s.email||null,staff_type:s.staffType||null}).then(({error})=>{if(error)logErr('SYNCSTAFF',error.message);});
 }
-function delStaff(id){confirm2('Delete staff member?',()=>{S.staff=S.staff.filter(s=>s.id!==id);S.projects.forEach(p=>{p.assignedStaff=(p.assignedStaff||[]).filter(sid=>sid!==id);});save();closeModal();toast('Deleted','s');render();});}
+function delStaff(id){confirm2('Delete staff member?',()=>{S.staff=S.staff.filter(s=>s.id!==id);S.projects.forEach(p=>{p.assignedStaff=(p.assignedStaff||[]).filter(sid=>sid!==id);});save();closeModal();toast('Deleted','s');render();if(isAdmin())supa.from('staff').delete().eq('id',id).then(({error})=>{if(error)logErr('DEL_STAFF',error.message);});});}
 function openAssignStaff(pid){
   const p=getProj(pid),unassigned=S.staff.filter(s=>!(p.assignedStaff||[]).includes(s.id));
   openModal(`<div class="modal-header"><span class="modal-title">Assign Staff</span><button class="btn btn-icon bs" onclick="closeModal()">${IC.close}</button></div>
     <div class="modal-body">${unassigned.length?unassigned.map(s=>`<div class="tx-item"><div class="staff-avatar">${esc(s.name[0].toUpperCase())}</div><div class="tx-info"><div class="tx-name">${esc(s.name)}</div><div class="tx-meta">${esc(s.role||'—')}</div></div><button class="btn bp" style="font-size:11px;padding:5px 10px" onclick="assignStaff('${pid}','${s.id}')">Assign</button></div>`).join(''):empty(EI.worker,'All staff assigned')}</div>`);
 }
-function assignStaff(pid,sid){const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.assignedStaff)p.assignedStaff=[];if(!p.assignedStaff.includes(sid))p.assignedStaff.push(sid);save();closeModal();toast('Assigned','s');renderProjTab(p);}
-function unassign(pid,sid){const p=getProj(pid);if(!p)return;p.assignedStaff=(p.assignedStaff||[]).filter(id=>id!==sid);save();toast('Removed','s');renderProjTab(p);}
+function assignStaff(pid,sid){const p=getProj(pid);if(!p){toast('Project not found','e');return;}if(!p.assignedStaff)p.assignedStaff=[];if(!p.assignedStaff.includes(sid))p.assignedStaff.push(sid);save();closeModal();toast('Assigned','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
+function unassign(pid,sid){const p=getProj(pid);if(!p)return;p.assignedStaff=(p.assignedStaff||[]).filter(id=>id!==sid);save();toast('Removed','s');renderProjTab(p);if(isAdmin())syncProjToSupabase(p);}
 
 // EXPORT
 function openExport(){
@@ -1884,8 +1889,7 @@ async function initApp(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   if(isAdmin()){
-    load();           // localStorage (existing data)
-    await pullPending(); // overlay pending submissions from Supabase
+    await loadFromSupabase();
   } else {
     await loadSupervisorData();
   }
@@ -1980,20 +1984,18 @@ async function submitPendingExpense(formData){
 // Admin: approve a pending transaction
 async function approveTx(sbId){
   const t=S.pendingTxs.find(x=>x.id===sbId);if(!t){toast('Not found','e');return;}
-  // Add to admin's local project data
   const proj=getProj(t.project_id);
-  if(proj){
+  if(proj&&!proj.transactions.find(tx=>tx.id===sbId)){
     proj.transactions.push({
-      id:uid(),type:t.type,amount:t.amount,
+      id:sbId,type:t.type,amount:t.amount,
       categoryId:t.category_id,accountId:t.account_id||'',
       projectId:t.project_id,date:t.date,
       ref:t.ref||'',inv:t.inv||'',payee:t.payee||'',
-      tags:[],note:t.note||'',
+      tags:[],note:t.note||'',status:'approved',
       createdAt:new Date().toISOString()
     });
     save();
   }
-  // Update Supabase
   await supa.from('transactions').update({
     status:'approved',
     approved_by:AUTH.user.id,
@@ -2018,18 +2020,128 @@ async function rejectTx(sbId){
   renderContent();
 }
 
-// Admin: sync a project to Supabase so supervisors can be assigned
+// Admin: sync a project to Supabase
 async function syncProjToSupabase(p){
   try{
     await supa.from('projects').upsert({
       id:p.id,name:p.name,agency:p.agency||null,client:p.client||null,
+      contract_type:p.contractType||null,location:p.location||null,
       contract_value:Number(p.contractValue||0),
       start_date:p.startDate||null,end_date:p.endDate||null,
       status:p.status||'active',account_id:p.accountId||null,
       wage_type:p.wageType||null,wage_amount:Number(p.wageAmount||0),
-      notes:p.notes||null
+      notes:p.notes||null,
+      metadata:{lostDays:p.lostDays||[],variations:p.variations||[],planGoals:p.planGoals||[],planBudgets:p.planBudgets||[],assignedStaff:p.assignedStaff||[]}
     });
   }catch(e){logErr('SYNCPROJ',e.message);}
+}
+
+// Map a flat Supabase transaction row to local camelCase format
+function mapTx(t){
+  return{id:t.id,type:t.type,amount:t.amount,categoryId:t.category_id||'',accountId:t.account_id||'',projectId:t.project_id||'',date:t.date,ref:t.ref||'',inv:t.inv||'',payee:t.payee||'',tags:t.tags?t.tags.split(',').map(x=>x.trim()).filter(Boolean):[],note:t.note||'',receipt:null,receiptName:t.receipt_name||null,status:t.status,submittedBy:t.submitted_by,createdAt:t.created_at};
+}
+
+// Admin: upsert a single transaction to Supabase
+async function syncTxToSupabase(tx){
+  try{
+    await supa.from('transactions').upsert({
+      id:tx.id,type:tx.type,amount:tx.amount,
+      category_id:tx.categoryId||null,account_id:tx.accountId||null,
+      project_id:tx.projectId||null,date:tx.date,
+      ref:tx.ref||null,inv:tx.inv||null,payee:tx.payee||null,
+      tags:tx.tags&&tx.tags.length?tx.tags.join(','):null,
+      note:tx.note||null,receipt_name:tx.receiptName||null,
+      status:'approved',approved_by:AUTH.user.id,
+      approved_at:new Date().toISOString()
+    });
+  }catch(e){logErr('SYNCTX',e.message);}
+}
+
+// Admin: load all data from Supabase; falls back to localStorage on error
+async function loadFromSupabase(){
+  try{
+    const[projRes,txRes,accRes,catRes,staffRes]=await Promise.all([
+      supa.from('projects').select('*'),
+      supa.from('transactions').select('*').eq('status','approved'),
+      supa.from('accounts').select('*'),
+      supa.from('categories').select('*'),
+      supa.from('staff').select('*')
+    ]);
+    const projs=projRes.data||[],txs=txRes.data||[],accs=accRes.data||[],cats=catRes.data||[],staff=staffRes.data||[];
+
+    // If cloud is empty but localStorage has data, migrate it up first
+    if(!projs.length&&!accs.length){
+      const loc=localStorage.getItem(STORE);
+      if(loc){
+        try{
+          const ld=JSON.parse(loc);
+          if((ld.projects||[]).length||(ld.accounts||[]).length){
+            await migrateLocalToSupabase(ld);
+            return loadFromSupabase();
+          }
+        }catch(e){}
+      }
+    }
+
+    S.projects=projs.map(p=>{
+      const m=p.metadata||{};
+      return{id:p.id,name:p.name,agency:p.agency||'',client:p.client||'',
+        contractType:p.contract_type||'',contractValue:p.contract_value||0,
+        location:p.location||'',startDate:p.start_date||'',endDate:p.end_date||'',
+        status:p.status||'active',accountId:p.account_id||'',
+        wageType:p.wage_type||'',wageAmount:p.wage_amount||0,
+        notes:p.notes||'',createdAt:p.created_at,
+        transactions:txs.filter(t=>t.project_id===p.id).map(mapTx),
+        lostDays:m.lostDays||[],variations:m.variations||[],
+        planGoals:m.planGoals||[],planBudgets:m.planBudgets||[],
+        assignedStaff:m.assignedStaff||[]};
+    });
+    if(accs.length)S.accounts=accs.map(a=>({id:a.id,name:a.name,currency:a.currency||'JMD',color:a.color||'',icon:a.icon||'🏦',openingBalance:a.opening_balance||0}));
+    if(cats.length)S.categories=cats.map(c=>({id:c.id,name:c.name,icon:c.icon||CICONS.tag,color:c.color||'#6b7280',type:c.type}));
+    if(staff.length)S.staff=staff.map(s=>({id:s.id,name:s.name,role:s.role||'',staffType:s.staff_type||'',phone:s.phone||'',email:s.email||''}));
+    await pullPending();
+    save(); // cache locally for offline fallback
+  }catch(e){
+    logErr('LOAD_SB',e.message,e.stack||'');
+    toast('Cloud sync failed — using local data','w');
+    load();
+  }
+  applyTheme();
+}
+
+// Admin: push existing localStorage data to Supabase on first cloud login
+async function migrateLocalToSupabase(ld){
+  toast('Uploading local data to cloud…','i');
+  try{
+    // Projects + their embedded transactions
+    for(const p of ld.projects||[]){
+      await syncProjToSupabase(p);
+      for(const tx of p.transactions||[]){
+        await supa.from('transactions').upsert({
+          id:tx.id,type:tx.type,amount:tx.amount,
+          category_id:tx.categoryId||null,account_id:tx.accountId||null,
+          project_id:p.id,date:tx.date,
+          ref:tx.ref||null,inv:tx.inv||null,payee:tx.payee||null,
+          tags:tx.tags&&tx.tags.length?tx.tags.join(','):null,
+          note:tx.note||null,receipt_name:tx.receiptName||null,
+          status:'approved',approved_by:AUTH.user.id,
+          approved_at:tx.createdAt||new Date().toISOString()
+        }).catch(e=>logErr('MIG_TX',e.message));
+      }
+    }
+    // Accounts
+    for(const a of ld.accounts||[])
+      await supa.from('accounts').upsert({id:a.id,name:a.name,icon:a.icon,color:a.color,currency:a.currency||'JMD',opening_balance:a.openingBalance||0}).catch(e=>logErr('MIG_ACC',e.message));
+    // Categories — all including defaults (skip base64 custom icons, too large)
+    for(const c of ld.categories||[]){
+      const icon=c.icon&&!c.icon.startsWith('data:')?c.icon:null;
+      await supa.from('categories').upsert({id:c.id,name:c.name,type:c.type,color:c.color,icon}).catch(e=>logErr('MIG_CAT',e.message));
+    }
+    // Staff
+    for(const s of ld.staff||[])
+      await supa.from('staff').upsert({id:s.id,name:s.name,role:s.role||null,phone:s.phone||null,email:s.email||null,staff_type:s.staffType||null}).catch(e=>logErr('MIG_STAFF',e.message));
+    toast('Data uploaded to cloud!','s');
+  }catch(e){logErr('MIGRATE',e.message,e.stack||'');toast('Migration partial — check logs','w');}
 }
 
 // Admin: assign a supervisor (by email) to a project in Supabase
