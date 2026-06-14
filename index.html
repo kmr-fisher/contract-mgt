@@ -239,7 +239,13 @@ html,body{height:100%;font-family:'Arial',Arial,sans-serif;background:var(--bg);
 .export-col{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--surf2);border:1px solid var(--bdr);cursor:pointer;font-size:12px;transition:var(--trans);font-weight:500}
 .export-col.selected{border-color:var(--acc);background:rgba(59,130,246,.08);color:var(--acc)}
 @media(max-width:900px){#sidebar{width:200px}.grid4{grid-template-columns:1fr 1fr}}
-@media(max-width:640px){#sidebar{display:none}.grid4,.grid3,.grid2{grid-template-columns:1fr}.content{padding:16px}}
+@media(max-width:640px){#sidebar{display:none}.grid4,.grid3,.grid2{grid-template-columns:1fr}.content{padding:16px 12px 80px}}
+#mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--surf);border-top:1px solid var(--bdr);padding:0 4px;padding-bottom:env(safe-area-inset-bottom)}
+#mob-nav .mn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 6px;flex:1;cursor:pointer;color:var(--txt3);font-size:9px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;transition:color 150ms;-webkit-tap-highlight-color:transparent;border:none;background:none}
+#mob-nav .mn-item svg{opacity:.7;transition:opacity 150ms}
+#mob-nav .mn-item.active{color:var(--acc)}
+#mob-nav .mn-item.active svg{opacity:1}
+@media(max-width:640px){#mob-nav{display:flex}}
 input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 </style>
@@ -253,6 +259,7 @@ input[type=number]{-moz-appearance:textfield}
     <div class="content" id="content"></div>
   </div>
 </div>
+<div id="mob-nav"></div>
 <div id="modal-overlay"><div id="modal-inner"></div></div>
 <div id="toasts"></div>
 <script>
@@ -770,6 +777,10 @@ function render(){renderSidebar();renderTopbar();renderContent();}
 
 function renderSidebar(){
   const navs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'reports',l:'Reports',i:IC.rep},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
+  // Mobile bottom nav (5 primary items — Reports hidden to keep it tight)
+  const mobNavs=[{id:'dash',l:'Home',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
+  const mn=document.getElementById('mob-nav');
+  if(mn)mn.innerHTML=mobNavs.map(n=>`<button class="mn-item${S.view===n.id&&!S.pid?' active':''}" onclick="nav('${n.id}')">${n.i}<span>${n.l}</span></button>`).join('');
   const accItems=S.accounts.map(a=>{
     const b=accBal(a);const active=S.view==='transactions'&&S.selectedAccount===a.id;
     return `<div class="sb-acc-item${active?' active':''}" style="position:relative" onclick="viewAcc('${a.id}')"><span class="sb-acc-dot" style="background:${a.color||'#3b82f6'}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span><span class="sb-acc-bal" style="color:${b<0?'var(--red)':'var(--green)'}">${(a.currency==='USD'?'$':'J$')+(b<0?'-':'')+Math.abs(b).toLocaleString('en',{maximumFractionDigits:0})}</span><button class="btn btn-icon bs" style="padding:2px;position:absolute;right:4px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity 150ms;font-size:10px" onclick="event.stopPropagation();openAddAcc('${a.id}')">${IC.edit}</button></div>`;
