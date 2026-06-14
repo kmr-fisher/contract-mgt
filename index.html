@@ -100,6 +100,7 @@ html,body{height:100%;font-family:'Arial',Arial,sans-serif;background:var(--bg);
 #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
 #modal-overlay.open{display:flex}
 .modal{background:var(--bg);border:1px solid var(--bdr);border-radius:var(--radius-lg);width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;animation:modalIn 220ms cubic-bezier(.34,1.56,.64,1) both}
+@media(max-width:640px){#modal-overlay{padding:0;align-items:flex-end}.modal{max-width:100%;max-height:calc(100dvh - 60px);border-radius:var(--radius-lg) var(--radius-lg) 0 0}.modal-body{padding:16px}.modal-header{padding:14px 16px 12px}.modal-footer{padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}}
 .modal-lg{max-width:680px}
 @keyframes modalIn{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--bdr);flex-shrink:0}
@@ -239,7 +240,7 @@ html,body{height:100%;font-family:'Arial',Arial,sans-serif;background:var(--bg);
 .export-col{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--radius-sm);background:var(--surf2);border:1px solid var(--bdr);cursor:pointer;font-size:12px;transition:var(--trans);font-weight:500}
 .export-col.selected{border-color:var(--acc);background:rgba(59,130,246,.08);color:var(--acc)}
 @media(max-width:900px){#sidebar{width:200px}.grid4{grid-template-columns:1fr 1fr}}
-@media(max-width:640px){#sidebar{display:none}.grid4,.grid3,.grid2{grid-template-columns:1fr}.content{padding:16px 12px 80px}}
+@media(max-width:640px){#sidebar{display:none}.grid4,.grid3,.grid2{grid-template-columns:1fr}.content{padding:16px 12px 80px}.form-2col{grid-template-columns:1fr}.cat-grid{grid-template-columns:repeat(4,1fr)}.summary-bar{grid-template-columns:1fr 1fr}}
 #mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--surf);border-top:1px solid var(--bdr);padding:0 4px;padding-bottom:env(safe-area-inset-bottom)}
 #mob-nav .mn-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px 6px;flex:1;cursor:pointer;color:var(--txt3);font-size:9px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;transition:color 150ms;-webkit-tap-highlight-color:transparent;border:none;background:none}
 #mob-nav .mn-item svg{opacity:.7;transition:opacity 150ms}
