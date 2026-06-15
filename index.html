@@ -529,6 +529,7 @@ const CICONS={
   fuel:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h10v18H3z"/><path d="M13 7h2a2 2 0 0 1 2 2v6a2 2 0 0 0 4 0V9l-2-2"/><line x1="6" y1="3" x2="6" y2="9"/><line x1="3" y1="9" x2="13" y2="9"/></svg>`,
   pipe:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 17h16"/><path d="M4 7v10"/><path d="M20 7v10"/><path d="M8 12h8"/></svg>`,
   drill:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 10l-2 2-4-4 2-2 4 4z"/><path d="M10 14l-7 7"/><path d="M14 10l4-4 2 2-4 4"/><rect x="16" y="4" width="4" height="2" rx=".5"/></svg>`,
+  supplier:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v4h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
 };
 const DEF_EXP=[
   {id:'c1',name:'Equipment Rental',icon:CICONS.equip,color:'#f59e0b',type:'expense'},
@@ -555,7 +556,7 @@ const DEF_INC=[
   {id:'i6',name:'Other Income',icon:CICONS.trending,color:'#f59e0b',type:'income'},
 ];
 
-let S={projects:[],staff:[],accounts:[],categories:[...DEF_EXP,...DEF_INC],theme:'light',view:'dash',pid:null,tab:'Overview',chartType:'donut',reportType:'expense',reportGroup:'categories',periodFilter:'all',periodMonth:null,selectedAccount:null,txDateFilter:null,pinHash:null,pinRecovery:null,pendingTxs:[]};
+let S={projects:[],staff:[],accounts:[],categories:[...DEF_EXP,...DEF_INC],suppliers:[],theme:'light',view:'dash',pid:null,tab:'Overview',chartType:'donut',reportType:'expense',reportGroup:'categories',periodFilter:'all',periodMonth:null,selectedAccount:null,txDateFilter:null,pinHash:null,pinRecovery:null,pendingTxs:[]};
 
 function load(){
   try{
@@ -820,7 +821,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){
 function render(){renderSidebar();renderTopbar();renderContent();}
 
 function renderSidebar(){
-  const allNavs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'reports',l:'Reports',i:IC.rep},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
+  const allNavs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'reports',l:'Reports',i:IC.rep},{id:'staff',l:'Staff',i:IC.staff},{id:'suppliers',l:'Suppliers',i:IC.supplier},{id:'settings',l:'Settings',i:IC.set}];
   const supNavs=[{id:'dash',l:'Dashboard',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx}];
   const navs=isSupervisor()?supNavs:allNavs;
   const mobNavItems=isSupervisor()?supNavs:[{id:'dash',l:'Home',i:IC.dash},{id:'projects',l:'Projects',i:IC.proj},{id:'transactions',l:'Transactions',i:IC.tx},{id:'staff',l:'Staff',i:IC.staff},{id:'settings',l:'Settings',i:IC.set}];
@@ -862,12 +863,13 @@ function renderTopbar(){
   let title='',sub='',actions='';
   if(S.pid){const p=getProj(S.pid);title=esc(p?.name||'Project');sub=esc(p?.agency||'');actions=`<button class="btn bs" onclick="nav('projects')">${IC.back} Back</button><button class="btn btn-icon bs" onclick="openEditProj('${S.pid}')">${IC.edit}</button>`;}
   else{
-    const m={dash:'Dashboard',projects:'Projects',transactions:'Transactions',reports:'Reports',staff:'Staff',settings:'Settings'};
+    const m={dash:'Dashboard',projects:'Projects',transactions:'Transactions',reports:'Reports',staff:'Staff',suppliers:'Suppliers',settings:'Settings'};
     title=m[S.view]||'Contract Management';
     if(S.view==='transactions'&&S.selectedAccount){const a=getAcc(S.selectedAccount);if(a){title=esc(a.name);sub=`${esc(a.currency)} · Balance: ${fmt(accBal(a),a.currency)}`;}}
     if(S.view==='projects'&&isAdmin())actions=`<button class="btn bp" onclick="openAddProj()">${IC.plus} New Project</button>`;
     if(S.view==='transactions')actions=`<button class="btn bg-green" onclick="openAddTx()">${IC.plus} ${isSupervisor()?'Add Expense':'Add Transaction'}</button>`;
     if(S.view==='staff')actions=`<button class="btn bp" onclick="openAddStaff()">${IC.plus} Add Staff</button>`;
+    if(S.view==='suppliers')actions=`<button class="btn bp" onclick="openAddSupplier()">${IC.plus} Add Supplier</button>`;
     if(S.view==='reports')actions=`<button class="btn bs" onclick="openExport()">${IC.dl} Export</button>`;
   }
   document.getElementById('topbar').innerHTML=`<div style="flex:1"><div class="topbar-title">${title}</div>${sub?`<div class="topbar-sub">${sub}</div>`:''}</div><div style="display:flex;align-items:center;gap:8px">${actions}<button class="btn btn-icon bs" onclick="openSearch()" title="Search (Ctrl+K)" style="padding:7px">${IC.search}</button></div>`;
@@ -884,6 +886,7 @@ function renderContent(){
     case'transactions':renderTxView(el);break;
     case'reports':renderReports(el);break;
     case'staff':renderStaffView(el);break;
+    case'suppliers':renderSuppliersView(el);break;
     case'settings':renderSettings(el);break;
     default:renderDash(el);
   }
@@ -1383,6 +1386,37 @@ function renderStaffView(el){
   el.innerHTML=`<div class="page">${S.staff.length?`<div class="grid3">${S.staff.map(s=>`<div class="card" style="display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer" onclick="openEditStaff('${s.id}')"><div class="staff-avatar">${esc(s.name[0].toUpperCase())}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${esc(s.name)}</div><div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(s.role||'—')}${s.staffType?' · <span style=\'background:rgba(59,130,246,.15);color:#93c5fd;padding:1px 6px;border-radius:10px\'>'+esc(s.staffType)+'</span>':''}</div>${s.phone?`<div style="font-size:11px;color:var(--txt3);margin-top:1px">${esc(s.phone)}</div>`:''}</div><button class="btn btn-icon bd" onclick="event.stopPropagation();delStaff('${s.id}')">${IC.trash}</button></div>`).join('')}</div>`:empty(EI.worker,'No staff members','Add staff to assign them to projects')+`<div style="text-align:center;margin-top:16px"><button class="btn bp" onclick="openAddStaff()">${IC.plus} Add Staff</button></div>`}</div>`;
 }
 
+// SUPPLIERS
+function renderSuppliersView(el){
+  el.innerHTML=`<div class="page">${S.suppliers.length?`<div class="grid3">${S.suppliers.map(s=>`<div class="card" style="display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer" onclick="openEditSupplier('${s.id}')"><div class="staff-avatar" style="background:var(--acc-g)">${esc((s.name||'?')[0].toUpperCase())}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${esc(s.name)}</div><div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(s.contact||'—')}</div>${s.phone?`<div style="font-size:11px;color:var(--txt3);margin-top:1px">${esc(s.phone)}</div>`:''}</div><button class="btn btn-icon bd" onclick="event.stopPropagation();delSupplier('${s.id}')">${IC.trash}</button></div>`).join('')}</div>`:empty(IC.supplier,'No suppliers yet','Add suppliers to select them when logging transactions')+`<div style="text-align:center;margin-top:16px"><button class="btn bp" onclick="openAddSupplier()">${IC.plus} Add Supplier</button></div>`}</div>`;
+}
+function openAddSupplier(){
+  openModal(`<div class="modal-header"><span class="modal-title">Add Supplier</span><button class="btn btn-icon bs" onclick="closeModal()">${IC.close}</button></div>
+    <div class="modal-body">
+      <div class="form-2col"><div class="form-row"><label>Company / Supplier Name *</label><input id="supname" placeholder="e.g. ABC Hardware Ltd"></div><div class="form-row"><label>Contact Person</label><input id="supcontact" placeholder="e.g. John Brown"></div></div>
+      <div class="form-2col"><div class="form-row"><label>Phone</label><input id="supphone" placeholder="+1 876 000 0000"></div><div class="form-row"><label>Email</label><input id="supemail" type="email" placeholder="supplier@example.com"></div></div>
+      <div class="form-row"><label>Notes</label><textarea id="supnotes" rows="2" placeholder="e.g. materials supplier, 30-day payment terms"></textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveSupplier()">Add Supplier</button></div>`);
+}
+function openEditSupplier(id){
+  const s=S.suppliers.find(x=>x.id===id);if(!s)return;
+  openModal(`<div class="modal-header"><span class="modal-title">Edit Supplier</span><button class="btn btn-icon bs" onclick="closeModal()">${IC.close}</button></div>
+    <div class="modal-body">
+      <div class="form-2col"><div class="form-row"><label>Company / Supplier Name *</label><input id="supname" value="${esc(s.name)}"></div><div class="form-row"><label>Contact Person</label><input id="supcontact" value="${esc(s.contact||'')}"></div></div>
+      <div class="form-2col"><div class="form-row"><label>Phone</label><input id="supphone" value="${esc(s.phone||'')}"></div><div class="form-row"><label>Email</label><input id="supemail" type="email" value="${esc(s.email||'')}"></div></div>
+      <div class="form-row"><label>Notes</label><textarea id="supnotes" rows="2">${esc(s.notes||'')}</textarea></div>
+    </div>
+    <div class="modal-footer"><button class="btn bd" onclick="confirm2('Delete supplier?',()=>delSupplier('${id}'))">Delete</button><button class="btn bs" onclick="closeModal()">Cancel</button><button class="btn bp" onclick="saveSupplier('${id}')">Save</button></div>`);
+}
+function saveSupplier(editId){
+  const n=document.getElementById('supname').value.trim();if(!n){toast('Name required','e');return;}
+  const s={id:editId||uid(),name:n,contact:document.getElementById('supcontact').value.trim(),phone:document.getElementById('supphone').value.trim(),email:document.getElementById('supemail').value.trim(),notes:document.getElementById('supnotes').value.trim()};
+  if(editId){const idx=S.suppliers.findIndex(x=>x.id===editId);if(idx>=0)S.suppliers[idx]=s;toast('Updated','s');}else{S.suppliers.push(s);toast('Supplier added','s');}
+  save();closeModal();render();
+}
+function delSupplier(id){confirm2('Delete supplier?',()=>{S.suppliers=S.suppliers.filter(s=>s.id!==id);save();closeModal();toast('Deleted','s');render();});}
+
 // SETTINGS
 function renderSettings(el){
   if(isSupervisor()){el.innerHTML=`<div class="page"><div class="card"><div class="sec-title">Settings</div><div style="margin-top:10px;font-size:13px;color:var(--txt2)">Settings are managed by the admin.</div></div></div>`;return;}
@@ -1534,7 +1568,16 @@ function _showTxModal(tx,projId,txType){
       <div id="txcatsec"><div class="form-row"><label>Category</label><div class="cat-grid" id="catgrid">${cats.map(c=>`<div class="cat-opt${selCat&&selCat.id===c.id?' selected':''}" onclick="selCat('${c.id}',this)" data-cid="${c.id}"><div class="cat-opt-icon" style="background:var(--surf3);color:var(--txt2)">${catIconHtml(c.icon)}</div><div class="cat-opt-name">${c.name}</div></div>`).join('')}</div></div></div>
       <input type="hidden" id="txcid" value="${selCat?selCat.id:''}">
       <div class="form-2col"><div class="form-row"><label>Date</label><input id="txdate" type="date" value="${isE?tx.date:today()}"></div><div class="form-row"><label>Reference / Cheque No.</label><input id="txref" placeholder="e.g. CHQ-001" value="${isE?esc(tx.ref||''):''}"></div></div>
-      <div class="form-2col"><div class="form-row"><label>Invoice No. <span style="font-weight:400;color:var(--txt3)">(optional)</span></label><input id="txinv" placeholder="e.g. INV-2024-0042" value="${isE?esc(tx.inv||''):''}"></div><div class="form-row"><label>Payee/Supplier</label><input id="txpayee" placeholder="e.g. ABC Supplies" value="${isE?esc(tx.payee||''):''}"></div></div>
+      ${(()=>{
+        const existPayee=isE?(tx.payee||''):'';
+        const staffMatch=existPayee&&S.staff.find(s=>s.name===existPayee);
+        const supMatch=existPayee&&S.suppliers.find(s=>s.name===existPayee);
+        const selVal=staffMatch?'s:'+existPayee:supMatch?'sp:'+existPayee:existPayee?'__other':'';
+        const showCustom=selVal==='__other';
+        const staffOpts=S.staff.length?`<optgroup label="── Staff ──">${S.staff.map(s=>`<option value="s:${esc(s.name)}"${selVal==='s:'+s.name?' selected':''}>${esc(s.name)}${s.role?' ('+esc(s.role)+')':''}</option>`).join('')}</optgroup>`:'';
+        const supOpts=S.suppliers.length?`<optgroup label="── Suppliers ──">${S.suppliers.map(s=>`<option value="sp:${esc(s.name)}"${selVal==='sp:'+s.name?' selected':''}>${esc(s.name)}</option>`).join('')}</optgroup>`:'';
+        return`<div class="form-2col"><div class="form-row"><label>Invoice No. <span style="font-weight:400;color:var(--txt3)">(optional)</span></label><input id="txinv" placeholder="e.g. INV-2024-0042" value="${isE?esc(tx.inv||''):''}"></div><div class="form-row"><label>Paid To:</label><select id="txpayee-sel" onchange="onPayeeSel(this.value)"><option value="">— Select —</option>${staffOpts}${supOpts}<option value="__other"${selVal==='__other'?' selected':''}>Other…</option></select><input id="txpayee-custom" placeholder="Enter name…" style="margin-top:6px;${showCustom?'':'display:none'}" value="${showCustom?esc(existPayee):''}" oninput="document.getElementById('txpayee').value=this.value"><input type="hidden" id="txpayee" value="${esc(existPayee)}"></div></div>`;
+      })()}
       <div class="form-row"><label>Account</label><select id="txacc"><option value="">No account</option>${S.accounts.map(a=>`<option value="${a.id}"${(isE&&tx.accountId===a.id)||(projId&&getProj(projId)?.accountId===a.id&&!isE)?' selected':''}>${esc(a.name)}</option>`).join('')}</select></div>
       <div class="form-row"><label>Project *</label><select id="txproj"><option value="">Select project</option>${S.projects.map(p=>`<option value="${p.id}"${projId===p.id||(isE&&tx.projectId===p.id)?' selected':''}>${esc(p.name)}</option>`).join('')}</select></div>
       <div class="form-row"><label>Tags (comma separated)</label><input id="txtags" placeholder="e.g. Phase1, NCB" value="${isE&&tx.tags?esc(tx.tags.join(', ')):''}"></div>
@@ -1560,6 +1603,12 @@ function swTxT(type){
   const sb=document.getElementById('txsbtn');if(sb)sb.className=`btn${type==='income'?' bg-green':' bp'}`;
 }
 function selCat(id,el){document.querySelectorAll('.cat-opt').forEach(e=>e.classList.remove('selected'));el.classList.add('selected');document.getElementById('txcid').value=id;}
+function onPayeeSel(val){
+  const custom=document.getElementById('txpayee-custom');
+  const hidden=document.getElementById('txpayee');
+  if(val==='__other'){custom.style.display='';custom.focus();hidden.value=custom.value;}
+  else{custom.style.display='none';hidden.value=(val.startsWith('s:')||val.startsWith('sp:'))?val.slice(val.indexOf(':')+1):'';}
+}
 function updAmt(){const v=document.getElementById('txamt').value,av=document.getElementById('txav');if(av)av.textContent=fmt(v||0);}
 
 function saveTx(editId,editPid){
