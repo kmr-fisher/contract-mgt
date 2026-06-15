@@ -1052,7 +1052,7 @@ function dashCharts(txs){
       <circle cx="${px(i)}" cy="${py(m.inc)}" r="3" fill="#22c55e" opacity="${m.inc?'1':'0'}"/>
       <circle cx="${px(i)}" cy="${py(m.exp)}" r="3" fill="#ef4444" opacity="${m.exp?'1':'0'}"/>`;
   }).join('');
-  const lineChart=`<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch">
+  const lineChart=`<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch" onwheel="if(this.scrollWidth>this.clientWidth){this.scrollLeft+=event.deltaY||event.deltaX;event.preventDefault();}" onmouseenter="this._wh=e=>{if(this.scrollWidth>this.clientWidth){this.scrollLeft+=e.deltaY||e.deltaX;e.preventDefault()}};this.addEventListener('wheel',this._wh,{passive:false})" onmouseleave="this.removeEventListener('wheel',this._wh)">
     <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;min-width:${W}px">
       ${yLines}
       <polyline points="${incPts}" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
