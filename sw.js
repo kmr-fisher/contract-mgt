@@ -1,4 +1,4 @@
-const CACHE = 'contract-mgt-v1';
+const CACHE = 'contract-mgt-v6';
 const ASSETS = [
   '/contract-mgt/',
   '/contract-mgt/index.html',
@@ -20,10 +20,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first for navigation, cache fallback for offline
-  if (e.request.mode === 'navigate') {
+  // Always network-first for the app shell so updates are instant
+  if (e.request.mode === 'navigate' || e.request.url.includes('index.html')) {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match('/contract-mgt/index.html'))
+      fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      }).catch(() => caches.match('/contract-mgt/index.html'))
     );
     return;
   }

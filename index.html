@@ -63,6 +63,7 @@ html,body{height:100%;font-family:'Arial',Arial,sans-serif;background:var(--bg);
 .topbar-sub{font-size:12px;color:var(--txt2);margin-top:2px}
 .content{flex:1;overflow-y:auto;padding:28px 32px}
 .content::-webkit-scrollbar{width:4px}.content::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:4px}
+.chart-scroll::-webkit-scrollbar{height:6px}.chart-scroll::-webkit-scrollbar-track{background:var(--surf2);border-radius:3px}.chart-scroll::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}.chart-scroll::-webkit-scrollbar-thumb:hover{background:var(--txt3)}
 .page{animation:pageIn var(--trans-slow) both}
 @keyframes pageIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .card{background:var(--surf);backdrop-filter:var(--blur);border:1px solid var(--bdr);border-radius:var(--radius);padding:20px}
@@ -1057,7 +1058,7 @@ function dashCharts(txs){
       <circle cx="${px(i)}" cy="${py(m.inc)}" r="3" fill="#22c55e" opacity="${m.inc?'1':'0'}"/>
       <circle cx="${px(i)}" cy="${py(m.exp)}" r="3" fill="#ef4444" opacity="${m.exp?'1':'0'}"/>`;
   }).join('');
-  const lineChart=`<div class="chart-scroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch">
+  const lineChart=`<div class="chart-scroll" style="overflow-x:scroll;overflow-y:hidden;-webkit-overflow-scrolling:touch;cursor:grab">
     <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;min-width:${W}px">
       ${yLines}
       <polyline points="${incPts}" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -1114,12 +1115,16 @@ function setupChartScroll(){
   document.querySelectorAll('.chart-scroll').forEach(el=>{
     if(el._scrollBound)return;
     el._scrollBound=true;
+    // Wheel: redirect vertical delta to horizontal scroll
     el.addEventListener('wheel',e=>{
-      if(el.scrollWidth>el.clientWidth){
-        el.scrollLeft+=e.deltaY||e.deltaX;
-        e.preventDefault();
-      }
+      el.scrollLeft+=e.deltaY+e.deltaX;
+      e.preventDefault();
     },{passive:false});
+    // Drag-to-scroll
+    let dragging=false,startX=0,startLeft=0;
+    el.addEventListener('mousedown',e=>{dragging=true;startX=e.clientX;startLeft=el.scrollLeft;el.style.cursor='grabbing';e.preventDefault();});
+    window.addEventListener('mousemove',e=>{if(!dragging)return;el.scrollLeft=startLeft-(e.clientX-startX);});
+    window.addEventListener('mouseup',()=>{if(dragging){dragging=false;el.style.cursor='grab';}});
   });
 }
 function buildDonut(groups,total){
