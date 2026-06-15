@@ -2111,7 +2111,7 @@ async function loadFromSupabase(){
     if(cats.length)S.categories=cats.map(c=>({id:c.id,name:c.name,icon:c.icon||CICONS.tag,color:c.color||'#6b7280',type:c.type}));
     if(staff.length)S.staff=staff.map(s=>({id:s.id,name:s.name,role:s.role||'',staffType:s.staff_type||'',phone:s.phone||'',email:s.email||''}));
     await pullPending();
-    save(); // cache locally for offline fallback
+    if(S.projects.length||S.accounts.length) save(); // only cache when data exists — never overwrite good local data with empty state
   }catch(e){
     logErr('LOAD_SB',e.message,e.stack||'');
     toast('Cloud sync failed — using local data','w');
