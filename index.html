@@ -973,6 +973,7 @@ function renderDash(el){
     ${dashContractSections()}
     ${dashCharts(txs)}
   </div>`;
+  setTimeout(setupChartScroll,0);
 }
 
 function dashContractSections(){
@@ -1056,7 +1057,7 @@ function dashCharts(txs){
       <circle cx="${px(i)}" cy="${py(m.inc)}" r="3" fill="#22c55e" opacity="${m.inc?'1':'0'}"/>
       <circle cx="${px(i)}" cy="${py(m.exp)}" r="3" fill="#ef4444" opacity="${m.exp?'1':'0'}"/>`;
   }).join('');
-  const lineChart=`<div style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch" onwheel="if(this.scrollWidth>this.clientWidth){this.scrollLeft+=event.deltaY||event.deltaX;event.preventDefault();}" onmouseenter="this._wh=e=>{if(this.scrollWidth>this.clientWidth){this.scrollLeft+=e.deltaY||e.deltaX;e.preventDefault()}};this.addEventListener('wheel',this._wh,{passive:false})" onmouseleave="this.removeEventListener('wheel',this._wh)">
+  const lineChart=`<div class="chart-scroll" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch">
     <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;min-width:${W}px">
       ${yLines}
       <polyline points="${incPts}" fill="none" stroke="#22c55e" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
@@ -1099,7 +1100,7 @@ function dashCharts(txs){
   }).join('');
 
   return`<div class="grid2" style="margin-bottom:20px">
-    <div class="card"><div class="sec-hdr"><span class="sec-title">Income vs Expenses — All Time</span><span style="font-size:11px;color:var(--txt3)">${n} months</span></div>${lineChart}</div>
+    <div class="card" style="min-width:0;overflow:hidden"><div class="sec-hdr"><span class="sec-title">Income vs Expenses — All Time</span><span style="font-size:11px;color:var(--txt3)">${n} months</span></div>${lineChart}</div>
     <div class="card"><div class="sec-hdr"><span class="sec-title">Expenses by Category</span></div>
       <div class="chart-donut-wrap" style="display:flex;gap:16px;align-items:flex-start">
         <div style="flex-shrink:0">${donut}</div>
@@ -1109,6 +1110,18 @@ function dashCharts(txs){
   </div>`;
 }
 
+function setupChartScroll(){
+  document.querySelectorAll('.chart-scroll').forEach(el=>{
+    if(el._scrollBound)return;
+    el._scrollBound=true;
+    el.addEventListener('wheel',e=>{
+      if(el.scrollWidth>el.clientWidth){
+        el.scrollLeft+=e.deltaY||e.deltaX;
+        e.preventDefault();
+      }
+    },{passive:false});
+  });
+}
 function buildDonut(groups,total){
   if(!total||!groups.length)return'';
   const r=44,ir=26,cx=60,cy=60;
