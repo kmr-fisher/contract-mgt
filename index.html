@@ -1605,7 +1605,7 @@ function _showTxModal(tx,projId,txType){
     </div>
     <div class="modal-footer">${isE&&!isSupervisor()?`<button class="btn bd" onclick="delTx('${tx.id}','${projId||tx.projectId||''}')">Delete</button>`:''}
       <button class="btn bs" onclick="closeModal()">Cancel</button>
-      <button class="btn bp" id="txsbtn" onclick="saveTx('${isE?tx.id:''}','${isE?projId||tx.projectId||'':''}'">${isSupervisor()?'Submit for Approval':'Save Transaction'}</button>
+      <button class="btn bp" id="txsbtn" onclick="saveTx('${isE?tx.id:''}','${isE?projId||tx.projectId||''}')">${isSupervisor()?'Submit for Approval':'Save Transaction'}</button>
     </div>`,'modal-lg');
   document.getElementById('modal-inner').dataset.tt=ct;
 }
